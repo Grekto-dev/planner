@@ -673,7 +673,7 @@
     </style>
 </head>
 <body>
-    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.1.0.</div>
+    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.1.1.</div>
     <header>
         <h1>Planner Semanal</h1>
         <div class="btn-group">
@@ -695,7 +695,7 @@
         <div class="controls-hint">
             Clique 1x para editar Datas ou Selecionar Atividade.<br>
             Clique 2x na Atividade para editar (Enter salva, Shift+Enter quebra linha).<br>
-            Arraste para reordenar.
+            Arraste para reordenar (aproxime das bordas para rolar).
         </div>
     </header>
 
@@ -775,8 +775,20 @@
         const dropIndicator = document.createElement('div');
         dropIndicator.classList.add('drop-indicator');
         const inboxContainer = document.getElementById('inbox-container');
-        const inboxPlaceholder = document.getElementById('inbox-placeholder');
+        let inboxPlaceholder = document.getElementById('inbox-placeholder');
         const plannerGrid = document.getElementById('planner-grid');
+
+        // Scroll Logic Vars
+        let autoScrollInterval = null;
+        let currentScrollSpeed = 0;
+        const SCROLL_ZONE_SIZE = 100; // Increased zone size for easier triggering
+
+        // Global Unload Listener
+        window.addEventListener('beforeunload', function (e) {
+            e.preventDefault();
+            e.returnValue = 'Você tem alterações não salvas.';
+            return 'Você tem alterações não salvas.';
+        });
 
         window.onload = function() {
             initWeekGrid();
@@ -789,12 +801,46 @@
                     updateRemoveButtonText();
                 }
             });
-
-            window.addEventListener('beforeunload', function (e) {
-                e.preventDefault(); 
-                e.returnValue = 'Você tem alterações não salvas. Deseja sair?';
-            });
         };
+
+        // Improved Auto-scroll handler
+        document.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            
+            const y = e.clientY;
+            const h = window.innerHeight;
+            
+            // Calculate speed
+            if (y < SCROLL_ZONE_SIZE) {
+                currentScrollSpeed = -15; 
+            } else if (y > h - SCROLL_ZONE_SIZE) {
+                currentScrollSpeed = 15;
+            } else {
+                currentScrollSpeed = 0;
+            }
+
+            // Manage Interval without constant resetting
+            if (currentScrollSpeed !== 0) {
+                if (!autoScrollInterval) {
+                    autoScrollInterval = setInterval(() => {
+                        window.scrollBy(0, currentScrollSpeed);
+                    }, 16);
+                }
+            } else {
+                if (autoScrollInterval) {
+                    clearInterval(autoScrollInterval);
+                    autoScrollInterval = null;
+                }
+            }
+        });
+
+        document.addEventListener('dragend', function() {
+            if (autoScrollInterval) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+            }
+            currentScrollSpeed = 0;
+        });
 
         function handleRemoveWeekClick() {
             if (!isRemoveMode) {
@@ -1048,6 +1094,7 @@
             placeholder.id = 'inbox-placeholder';
             placeholder.textContent = 'Novas atividades surgem aqui...';
             inboxContainer.appendChild(placeholder);
+            inboxPlaceholder = placeholder;
 
             const totalWeeks = Math.ceil(state.columns.length / 7);
             
@@ -1313,7 +1360,7 @@
                 if (h > 0) parts.push(`${h}h`);
                 if (m > 0 || (h > 0 && s > 0)) parts.push(`${m}min`);
                 if (s > 0) parts.push(`${s}s`);
-                if (parts.length === 0) return "0 min";
+                if (parts.length === 0) return "0h";
                 return parts.join(" ");
             } else {
                 const totalMin = Math.floor(totalSeconds / 60);
@@ -1604,8 +1651,9 @@
         }
 
         function checkInboxEmpty() {
+            const ph = document.getElementById('inbox-placeholder');
             const hasTasks = inboxContainer.querySelectorAll('.task').length > 0;
-            inboxPlaceholder.style.display = hasTasks ? 'none' : 'block';
+            if(ph) ph.style.display = hasTasks ? 'none' : 'block';
         }
 
         function createTask() {
@@ -1805,24 +1853,50 @@
 
         function getDragAfterElement(container, x, y) {
             const draggableElements = [...container.querySelectorAll('.task:not(.dragging)')];
-            const isHorizontal = container.id === 'inbox-container';
+            
+            // Logic for Grid (Inbox) vs List (Days)
+            if (container.id === 'inbox-container') {
+                // For grid (Inbox), find closest element by Euclidean distance
+                let closestElement = null;
+                let minDistance = Number.POSITIVE_INFINITY;
 
-            return draggableElements.reduce((closest, child) => {
-                const box = child.getBoundingClientRect();
-                let offset;
-
-                if (isHorizontal) {
-                    offset = x - box.left - box.width / 2;
+                draggableElements.forEach(child => {
+                    const box = child.getBoundingClientRect();
+                    const centerX = box.left + box.width / 2;
+                    const centerY = box.top + box.height / 2;
+                    
+                    const dist = Math.hypot(x - centerX, y - centerY);
+                    
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestElement = child;
+                    }
+                });
+                
+                if (!closestElement) return null; // Append to end if no close element
+                
+                // Determine if insert before or after closest element
+                const box = closestElement.getBoundingClientRect();
+                const centerX = box.left + box.width / 2;
+                
+                if (x < centerX) {
+                    return closestElement; 
                 } else {
-                    offset = y - box.top - box.height / 2;
+                    return closestElement.nextElementSibling;
                 }
 
-                if (offset < 0 && offset > closest.offset) {
-                    return { offset: offset, element: child };
-                } else {
-                    return closest;
-                }
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
+            } else {
+                // Vertical List Logic (Days) - standard offset based
+                return draggableElements.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset: offset, element: child };
+                    } else {
+                        return closest;
+                    }
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+            }
         }
 
         function updateTaskColor(task, container) {

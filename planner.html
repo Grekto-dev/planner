@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planner Semanal Interativo</title>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        .canto-esquerdo {
+            top: 10px;
+            left: 10px;
+            font-size: 12px;
+            font-family: Arial;
+        }
+        
+        :root {
+            --bg-body: #f4f4f9;
+            --task-default: #9e9e9e;
+            --col-mon: #a8e6cf; --task-mon: #388e3c;
+            --col-tue: #ffccbc; --task-tue: #e64a19;
+            --col-wed: #bbdefb; --task-wed: #1976d2;
+            --col-thu: #e1bee7; --task-thu: #7b1fa2;
+            --col-fri: #fff9c4; --task-fri: #f9a825;
+            --col-sat: #ffcdd2; --task-sat: #d32f2f;
+            --col-sun: #b2dfdb; --task-sun: #00796b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-body);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            box-sizing: border-box;
+            min-width: 1200px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .btn-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 0 15px;
+            height: 42px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        button:active { transform: scale(0.95); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        #btn-add { background-color: #28a745; }
+        #btn-remove { background-color: #dc3545; }
+        #btn-clear { background-color: #ffc107; color: #333; }
+        #btn-add-week { background-color: #17a2b8; } 
+        #btn-rm-week { background-color: #e83e8c; }
+        
+        #btn-rm-week.active {
+            background-color: #343a40;
+            border: 2px solid #20c997;
+            color: #20c997;
+            box-shadow: 0 0 10px rgba(32, 201, 151, 0.5);
+        }
+        
+        #btn-rm-week.active.confirm-state {
+            background-color: #dc3545;
+            color: white;
+            border: 2px solid #ff9999;
+        }
+
+        #btn-undo, #btn-redo { background-color: #6c757d; font-size: 20px; min-width: 40px; padding: 0;}
+        #btn-save { background-color: #6610f2; }
+        #btn-load { background-color: #fd7e14; }
+        #btn-print { background-color: #6c757d; }
+        #btn-img { background-color: #20c997; }
+
+        #btn-settings { 
+            background-color: #343a40; 
+            font-size: 20px;
+            padding: 0 15px;
+        }
+
+        .controls-hint {
+            font-size: 13px;
+            color: #666;
+            margin-top: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            z-index: 1000;
+            padding: 25px;
+            width: 320px;
+        }
+
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 999;
+            background: rgba(0,0,0,0.05);
+        }
+
+        #settings-modal {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #confirm-modal {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            cursor: grab;
+            user-select: none;
+        }
+        .modal-header:active { cursor: grabbing; }
+
+        .modal-title { font-weight: bold; font-size: 18px; color: #333; }
+        .close-btn { 
+            background: transparent; 
+            color: #999; 
+            font-size: 20px; 
+            padding: 0; 
+            margin: 0;
+            cursor: pointer;
+        }
+        .close-btn:hover { color: red; }
+
+        .settings-group { margin-bottom: 20px; text-align: left; }
+        .settings-group label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; color: #555; }
+        .settings-group select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ddd; font-size: 14px; }
+
+        .confirm-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .btn-confirm { background-color: #dc3545; color: white; }
+        .btn-cancel { background-color: #6c757d; color: white; }
+
+        #inbox-container {
+            background-color: white;
+            border: 3px dashed #ccc;
+            padding: 15px;
+            min-height: 100px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+            align-items: center;
+            align-content: flex-start;
+            margin-bottom: 25px;
+            border-radius: 12px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .inbox-label {
+            width: 100%;
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            position: absolute;
+            pointer-events: none;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #planner-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            flex-grow: 1;
+        }
+
+        .week-row {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+
+        .week-select-container {
+            display: none;
+            width: 40px;
+            flex-shrink: 0;
+            align-items: center;
+            justify-content: center;
+            background-color: #e9ecef;
+            border-radius: 8px;
+            border: 1px dashed #adb5bd;
+        }
+
+        .week-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .week-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 15px;
+            flex-grow: 1;
+            align-items: stretch;
+        }
+
+        body.remove-mode .week-select-container {
+            display: flex;
+            animation: fadeIn 0.3s;
+        }
+
+        body.remove-mode .task, body.remove-mode .day-column {
+            pointer-events: none;
+            opacity: 0.8;
+        }
+        body.remove-mode .week-select-container {
+            pointer-events: auto;
+            opacity: 1;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+
+        .day-column {
+            background-color: white;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            min-height: 250px; 
+            height: 100%;
+            margin-bottom: 0;
+            box-sizing: border-box;
+        }
+
+        .day-header {
+            padding: 15px 5px 5px 5px;
+            text-align: center;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #444;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .day-date {
+            text-align: center;
+            font-size: 13px;
+            color: #555;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            cursor: pointer;
+            font-weight: normal;
+            min-height: 18px;
+            position: relative; 
+        }
+        .day-date:hover { text-decoration: underline; color: #000; background-color: rgba(0,0,0,0.02); }
+        
+        .date-input {
+            width: 85%;
+            text-align: center;
+            font-size: 13px;
+            font-family: inherit;
+            border: 1px solid #999;
+            border-radius: 4px;
+            padding: 2px;
+        }
+
+        .mini-calendar {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            padding: 10px;
+            z-index: 2000;
+            width: 200px;
+            font-family: 'Segoe UI', sans-serif;
+            color: #333;
+            margin-top: 5px;
+            user-select: none;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .cal-nav-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            color: #666;
+            padding: 2px 5px;
+        }
+        .cal-nav-btn:hover { color: #000; background-color: #eee; border-radius: 4px; }
+
+        .cal-close-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #dc3545;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            text-align: center;
+        }
+
+        .cal-day-label {
+            font-size: 10px;
+            color: #888;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .cal-day {
+            font-size: 12px;
+            padding: 4px 0;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .cal-day:hover { background-color: #f0f0f0; }
+        .cal-day.today { border: 1px solid #28a745; color: #28a745; font-weight: bold; }
+        .cal-day.selected { background-color: #007bff; color: white; }
+        .cal-day.empty { pointer-events: none; }
+
+        .day-column[data-day="mon"] .day-header, .day-column[data-day="mon"] .day-date { background-color: var(--col-mon); }
+        .day-column[data-day="tue"] .day-header, .day-column[data-day="tue"] .day-date { background-color: var(--col-tue); }
+        .day-column[data-day="wed"] .day-header, .day-column[data-day="wed"] .day-date { background-color: var(--col-wed); }
+        .day-column[data-day="thu"] .day-header, .day-column[data-day="thu"] .day-date { background-color: var(--col-thu); }
+        .day-column[data-day="fri"] .day-header, .day-column[data-day="fri"] .day-date { background-color: var(--col-fri); }
+        .day-column[data-day="sat"] .day-header, .day-column[data-day="sat"] .day-date { background-color: var(--col-sat); }
+        .day-column[data-day="sun"] .day-header, .day-column[data-day="sun"] .day-date { background-color: var(--col-sun); }
+
+        .day-content {
+            flex-grow: 1;
+            padding: 10px 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: background-color 0.2s;
+            position: relative;
+            min-height: 50px;
+        }
+
+        .day-content.drag-over, #inbox-container.drag-over {
+            background-color: #e9ecef;
+        }
+
+        .day-footer {
+            background-color: #f8f9fa;
+            padding: 12px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #555;
+            border-top: 1px solid #eee;
+            border-radius: 0 0 12px 12px;
+            margin-top: auto;
+        }
+
+        .overload-warning {
+            color: #d32f2f !important;
+            cursor: help;
+            text-decoration: underline dashed;
+        }
+        .overload-warning::after { content: " ❗"; }
+
+        .task {
+            background-color: var(--task-default);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: grab;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-size: 14px;
+            position: relative;
+            user-select: none;
+            width: calc(100% - 10px); 
+            margin: 0 auto; 
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 6px;
+            min-height: 60px;
+        }
+
+        .task.dragging { opacity: 0.5; }
+
+        .drop-indicator {
+            height: 6px;
+            background-color: #bbb;
+            border-radius: 3px;
+            margin: 5px auto;
+            width: calc(100% - 10px);
+            pointer-events: none;
+            transition: all 0.1s;
+        }
+
+        #inbox-container .task { width: 140px; margin: 0; }
+        
+        #inbox-container .drop-indicator { 
+            width: 6px; 
+            height: 60px; 
+            margin: 0 5px; 
+            display: inline-block;
+        }
+
+        .task-title {
+            font-weight: 600;
+            font-size: 14px;
+            line-height: 1.3;
+            word-break: break-word;
+            white-space: pre-wrap; 
+        }
+
+        .task-duration {
+            background: rgba(255,255,255,0.25);
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            align-self: flex-start;
+            display: inline-block;
+        }
+
+        .task:active { cursor: grabbing; }
+        .task.selected { outline: 3px solid #333; transform: scale(0.98); }
+
+        .task.editing {
+            cursor: default;
+            background-color: #fff !important;
+            color: #333 !important;
+            border: 2px solid var(--task-default);
+        }
+
+        .edit-input {
+            box-sizing: border-box;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        
+        .edit-textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 5px;
+            margin-bottom: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: none; 
+            overflow: hidden; 
+            min-height: 32px;
+        }
+        
+        .time-edit-container {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .time-edit-container .edit-input {
+            width: 100%;
+        }
+        .time-unit-label {
+            font-size: 11px;
+            color: #666;
+            margin-left: 2px;
+        }
+
+        .edit-textarea:focus, .edit-input:focus { outline: 2px solid #666; border-color: transparent; }
+
+        .task-mon { background-color: var(--task-mon) !important; }
+        .task-tue { background-color: var(--task-tue) !important; }
+        .task-wed { background-color: var(--task-wed) !important; }
+        .task-thu { background-color: var(--task-thu) !important; }
+        .task-fri { background-color: var(--task-fri) !important; }
+        .task-sat { background-color: var(--task-sat) !important; }
+        .task-sun { background-color: var(--task-sun) !important; }
+
+        body.snapshot-mode .day-column {
+            box-shadow: none !important;
+            border: 1px solid #ccc !important;
+        }
+        body.snapshot-mode .task {
+            box-shadow: none !important;
+            border: none !important;
+        }
+        
+        body.snapshot-mode .week-select-container {
+            display: none !important;
+        }
+
+        @media print {
+            @page {
+                size: landscape;
+                margin: 5mm;
+            }
+
+            header, .canto-esquerdo, #inbox-container, .modal, #modal-overlay, #file-input, .week-select-container {
+                display: none !important;
+            }
+
+            body {
+                background-color: white;
+                padding: 0;
+                margin: 0;
+                display: block;
+                min-width: auto;
+            }
+
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            #planner-grid {
+                display: block;
+                width: 100%;
+            }
+            
+            .week-row {
+                display: block;
+                page-break-inside: avoid;
+                margin-bottom: 20px;
+            }
+
+            .week-days {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: 5px;
+                width: 100%;
+                align-items: stretch !important;
+            }
+            
+            .day-column {
+                box-shadow: none;
+                border: 1px solid #ccc;
+                min-height: auto;
+                height: 100%;
+            }
+
+            .task {
+                border: 1px solid rgba(0,0,0,0.1);
+                page-break-inside: avoid;
+                box-shadow: none;
+            }
+            
+            .day-date, .day-header {
+                color: #000;
+            }
+            
+            .day-content {
+                display: block;
+            }
+            .task {
+                margin-bottom: 5px;
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.0.0.</div>
+    <header>
+        <h1>Planner Semanal</h1>
+        <div class="btn-group">
+            <button id="btn-undo" onclick="undo()" title="Desfazer" disabled>↶</button>
+            <button id="btn-redo" onclick="redo()" title="Refazer" disabled>↷</button>
+            <div style="width: 10px;"></div>
+            <button id="btn-add" onclick="createTask()">+ Atividade</button>
+            <button id="btn-remove" onclick="removeSelectedTask()">- Atividade</button>
+            <button id="btn-clear" onclick="askClearAll()" title="Limpar tudo">🧹 Limpar</button>
+            <button id="btn-add-week" onclick="addWeek()" title="Adicionar Próxima Semana">+ Semana</button>
+            <button id="btn-rm-week" onclick="handleRemoveWeekClick()" title="Remover Semanas">- Semana</button>
+            <button id="btn-save" onclick="saveToFile()" title="Baixar arquivo JSON">💾</button>
+            <button id="btn-load" onclick="document.getElementById('file-input').click()" title="Carregar arquivo JSON">📂</button>
+            <button id="btn-print" onclick="window.print()" title="Imprimir Planner">🖨️</button>
+            <button id="btn-img" onclick="saveAsImage()" title="Salvar como Imagem (JPEG)">🖼️</button>
+            <input type="file" id="file-input" accept=".json" style="display: none;" onchange="loadFromFile(event)">
+            <button id="btn-settings" onclick="toggleSettings()" title="Configurações">⚙️</button>
+        </div>
+        <div class="controls-hint">
+            Clique 1x para editar Datas ou Selecionar Atividade.<br>
+            Clique 2x na Atividade para editar (Enter salva, Shift+Enter quebra linha).<br>
+            Arraste para reordenar.
+        </div>
+    </header>
+
+    <div id="modal-overlay" onclick="closeAllModals()"></div>
+
+    <div id="settings-modal" class="modal">
+        <div class="modal-header" id="settings-header">
+            <span class="modal-title">Configurações</span>
+            <button class="close-btn" onclick="closeAllModals()">X</button>
+        </div>
+        
+        <div class="settings-group">
+            <label>Formato de Data:</label>
+            <select id="cfg-date-format" onchange="updateConfig()">
+                <option value="dd/mm">DD/MM/AAAA</option>
+                <option value="mm/dd">MM/DD/AAAA</option>
+            </select>
+        </div>
+
+        <div class="settings-group">
+            <label>Unidade da Atividade (Edição):</label>
+            <select id="cfg-task-unit" onchange="updateConfig()">
+                <option value="min">Minutos</option>
+                <option value="hour">Horas + Minutos</option>
+            </select>
+        </div>
+
+        <div class="settings-group">
+            <label>Unidade do Total do Dia:</label>
+            <select id="cfg-day-unit" onchange="updateConfig()">
+                <option value="min">Minutos</option>
+                <option value="hour">Horas + Minutos</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Atenção</span>
+        </div>
+        <p>Tem certeza que deseja remover todas as atividades? Essa ação não pode ser desfeita.</p>
+        <div class="confirm-actions">
+            <button class="btn-confirm" onclick="confirmClear()">Sim, limpar tudo</button>
+            <button class="btn-cancel" onclick="closeAllModals()">Cancelar</button>
+        </div>
+    </div>
+
+    <div id="inbox-container" class="droppable" data-day="inbox">
+        <span class="inbox-label" id="inbox-placeholder">Novas atividades surgem aqui...</span>
+    </div>
+
+    <div id="planner-grid"></div>
+
+    <script>
+        let selectedTask = null;
+        let activeSaveCallback = null;
+        let isRemoveMode = false;
+        
+        let historyStack = [];
+        let redoStack = [];
+        const MAX_HISTORY = 12;
+        let isRestoringState = false;
+
+        const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        const dayNamesPt = {
+            'sun': 'Domingo', 'mon': 'Segunda', 'tue': 'Terça', 'wed': 'Quarta',
+            'thu': 'Quinta', 'fri': 'Sexta', 'sat': 'Sábado'
+        };
+        const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+        const appConfig = {
+            dateFormat: 'dd/mm',
+            taskUnit: 'min',
+            dayUnit: 'min'
+        };
+
+        const dropIndicator = document.createElement('div');
+        dropIndicator.classList.add('drop-indicator');
+        const inboxContainer = document.getElementById('inbox-container');
+        const inboxPlaceholder = document.getElementById('inbox-placeholder');
+        const plannerGrid = document.getElementById('planner-grid');
+
+        window.onload = function() {
+            initWeekGrid();
+            setupDraggableModal();
+            updateHistoryButtons();
+            checkRemoveButtonStatus();
+            
+            plannerGrid.addEventListener('change', function(e) {
+                if (e.target.classList.contains('week-checkbox')) {
+                    updateRemoveButtonText();
+                }
+            });
+
+            window.addEventListener('beforeunload', function (e) {
+                e.preventDefault(); 
+                e.returnValue = 'Você tem alterações não salvas. Deseja sair?';
+            });
+        };
+
+        function handleRemoveWeekClick() {
+            if (!isRemoveMode) {
+                enterRemoveMode();
+            } else {
+                const checkedCount = document.querySelectorAll('.week-checkbox:checked').length;
+                if (checkedCount === 0) {
+                    exitRemoveMode();
+                } else {
+                    executeRemoveWeeks();
+                }
+            }
+        }
+
+        function enterRemoveMode() {
+            isRemoveMode = true;
+            document.body.classList.add('remove-mode');
+            const btn = document.getElementById('btn-rm-week');
+            btn.classList.add('active');
+            updateRemoveButtonText();
+            toggleOtherButtons(true);
+        }
+
+        function updateRemoveButtonText() {
+            const btn = document.getElementById('btn-rm-week');
+            if (!isRemoveMode) {
+                 btn.textContent = "- Semana";
+                 btn.classList.remove('active', 'confirm-state');
+                 return;
+            }
+            const checkedCount = document.querySelectorAll('.week-checkbox:checked').length;
+            if (checkedCount === 0) {
+                btn.textContent = "Cancelar";
+                btn.classList.remove('confirm-state');
+            } else {
+                btn.textContent = "Confirmar Exclusão";
+                btn.classList.add('confirm-state');
+            }
+        }
+
+        function exitRemoveMode() {
+            isRemoveMode = false;
+            document.body.classList.remove('remove-mode');
+            const btn = document.getElementById('btn-rm-week');
+            btn.classList.remove('active', 'confirm-state');
+            btn.textContent = "- Semana";
+            document.querySelectorAll('.week-checkbox').forEach(cb => cb.checked = false);
+            toggleOtherButtons(false);
+        }
+
+        function toggleOtherButtons(disabled) {
+            const buttons = document.querySelectorAll('.btn-group button:not(#btn-rm-week)');
+            buttons.forEach(b => b.disabled = disabled);
+            if (!disabled) updateHistoryButtons();
+        }
+
+        function executeRemoveWeeks() {
+            const checkboxes = document.querySelectorAll('.week-checkbox:checked');
+            if (checkboxes.length === 0) {
+                exitRemoveMode(); 
+                return;
+            }
+
+            const rowsToRemove = [];
+            checkboxes.forEach(cb => {
+                const row = cb.closest('.week-row');
+                rowsToRemove.push(row);
+            });
+
+            const allWeeks = document.querySelectorAll('.week-row');
+            if (rowsToRemove.length >= allWeeks.length) {
+                alert("O planner deve ter pelo menos uma semana.");
+                return;
+            }
+
+            let hasTasks = false;
+            rowsToRemove.forEach(row => {
+                if (row.querySelectorAll('.task').length > 0) hasTasks = true;
+            });
+
+            if (hasTasks) {
+                if (!confirm("Algumas semanas selecionadas contêm tarefas. Elas serão movidas para o Inbox. Deseja continuar?")) {
+                    return;
+                }
+            }
+
+            saveState();
+
+            rowsToRemove.forEach(row => {
+                const tasks = row.querySelectorAll('.task');
+                tasks.forEach(t => {
+                    inboxContainer.appendChild(t);
+                    updateTaskColor(t, inboxContainer);
+                });
+                row.remove();
+            });
+
+            checkInboxEmpty();
+            recalculateAllTotals();
+            checkRemoveButtonStatus();
+            exitRemoveMode();
+        }
+
+        function checkRemoveButtonStatus() {
+            const weeks = document.querySelectorAll('.week-row');
+            const btn = document.getElementById('btn-rm-week');
+            
+            if (weeks.length <= 1 && !isRemoveMode) {
+                btn.disabled = true;
+                btn.title = "Não é possível remover a única semana restante.";
+                btn.style.opacity = "0.5";
+                btn.style.cursor = "not-allowed";
+            } else if (!isRemoveMode) {
+                btn.disabled = false;
+                btn.title = "Remover Semanas";
+                btn.style.opacity = "1";
+                btn.style.cursor = "pointer";
+            }
+        }
+
+        function saveAsImage() {
+            const header = document.querySelector('header');
+            const inbox = document.getElementById('inbox-container');
+            const createdBy = document.querySelector('.canto-esquerdo');
+            
+            if(header) header.style.display = 'none';
+            if(inbox) inbox.style.display = 'none';
+            if(createdBy) createdBy.style.display = 'none';
+
+            document.body.classList.add('snapshot-mode');
+
+            html2canvas(document.body, {
+                backgroundColor: '#f4f4f9', 
+                scrollY: -window.scrollY,
+                windowWidth: document.documentElement.scrollWidth,
+                windowHeight: document.documentElement.scrollHeight,
+                scale: 2 
+            }).then(canvas => {
+                if(header) header.style.display = '';
+                if(inbox) inbox.style.display = '';
+                if(createdBy) createdBy.style.display = '';
+                document.body.classList.remove('snapshot-mode');
+
+                const link = document.createElement('a');
+                link.download = 'meu_planner.jpeg';
+                link.href = canvas.toDataURL('image/jpeg', 0.9);
+                link.click();
+            }).catch(err => {
+                console.error("Erro ao gerar imagem:", err);
+                alert("Ocorreu um erro ao gerar a imagem.");
+                if(header) header.style.display = '';
+                if(inbox) inbox.style.display = '';
+                if(createdBy) createdBy.style.display = '';
+                document.body.classList.remove('snapshot-mode');
+            });
+        }
+
+        function saveToFile() {
+            const state = serializeState();
+            const jsonStr = JSON.stringify(state, null, 2); 
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
+            
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "meu_planner.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function loadFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const state = JSON.parse(e.target.result);
+                    if (state.tasks && state.columns) {
+                        if (confirm("Carregar este arquivo substituirá seu planner atual. Deseja continuar?")) {
+                            saveState(); 
+                            restoreState(state);
+                        }
+                    } else {
+                        alert("Arquivo inválido. O formato do JSON não corresponde ao esperado.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert("Erro ao ler o arquivo. Certifique-se de que é um JSON válido.");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function saveState() {
+            if (isRestoringState) return;
+
+            const state = serializeState();
+            historyStack.push(state);
+            if (historyStack.length > MAX_HISTORY) historyStack.shift();
+            
+            redoStack = []; 
+            updateHistoryButtons();
+        }
+
+        function serializeState() {
+            const tasks = [];
+            document.querySelectorAll('.task').forEach(t => {
+                tasks.push({
+                    name: t.dataset.name,
+                    minutes: t.dataset.minutes,
+                    parentId: t.parentElement.id
+                });
+            });
+
+            const columns = [];
+            document.querySelectorAll('.day-column').forEach(col => {
+                const dateEl = col.querySelector('.day-date');
+                columns.push({
+                    dayKey: col.dataset.day,
+                    contentId: col.querySelector('.day-content').id,
+                    footerId: col.querySelector('.day-footer').id,
+                    timestamp: parseInt(dateEl.dataset.timestamp)
+                });
+            });
+
+            return { tasks, columns, config: appConfig };
+        }
+
+        function restoreState(state) {
+            isRestoringState = true;
+            forceCloseActiveEditor();
+            if (isRemoveMode) exitRemoveMode();
+            selectedTask = null;
+
+            if (state.config) {
+                appConfig.dateFormat = state.config.dateFormat || 'dd/mm';
+                appConfig.taskUnit = state.config.taskUnit || 'min';
+                appConfig.dayUnit = state.config.dayUnit || 'min';
+
+                document.getElementById('cfg-date-format').value = appConfig.dateFormat;
+                document.getElementById('cfg-task-unit').value = appConfig.taskUnit;
+                document.getElementById('cfg-day-unit').value = appConfig.dayUnit;
+            }
+
+            plannerGrid.innerHTML = ''; 
+            inboxContainer.innerHTML = '';
+            const placeholder = document.createElement('span');
+            placeholder.className = 'inbox-label';
+            placeholder.id = 'inbox-placeholder';
+            placeholder.textContent = 'Novas atividades surgem aqui...';
+            inboxContainer.appendChild(placeholder);
+
+            const totalWeeks = Math.ceil(state.columns.length / 7);
+            
+            for (let w = 0; w < totalWeeks; w++) {
+                const weekColumnsData = state.columns.slice(w * 7, (w + 1) * 7);
+                const weekRow = document.createElement('div');
+                weekRow.className = 'week-row';
+                
+                const selectContainer = document.createElement('div');
+                selectContainer.className = 'week-select-container';
+                selectContainer.innerHTML = `<input type="checkbox" class="week-checkbox">`;
+                weekRow.appendChild(selectContainer);
+
+                const weekDays = document.createElement('div');
+                weekDays.className = 'week-days';
+
+                weekColumnsData.forEach((colData, index) => {
+                    const dayName = dayNamesPt[colData.dayKey];
+                    const date = new Date(colData.timestamp);
+                    const dateStr = formatDate(date, appConfig.dateFormat); 
+                    
+                    const colHtml = `
+                        <div class="day-column" data-day="${colData.dayKey}">
+                            <div class="day-header">${dayName}</div>
+                            <div class="day-date" data-timestamp="${colData.timestamp}" onclick="editDate(this)">${dateStr}</div>
+                            <div class="day-content droppable" id="${colData.contentId}"></div>
+                            <div class="day-footer" id="${colData.footerId}">Total: <span id="total-restored-${w}-${index}">0 min</span></div>
+                        </div>
+                    `;
+                    weekDays.insertAdjacentHTML('beforeend', colHtml);
+                });
+
+                weekRow.appendChild(weekDays);
+                plannerGrid.appendChild(weekRow);
+            }
+
+            state.tasks.forEach(tData => {
+                const task = document.createElement('div');
+                task.classList.add('task');
+                task.draggable = true;
+                task.dataset.name = tData.name;
+                task.dataset.minutes = tData.minutes;
+                
+                renderTaskContent(task);
+                addTaskEvents(task);
+
+                const parent = document.getElementById(tData.parentId);
+                if (parent) {
+                    parent.appendChild(task);
+                    updateTaskColor(task, parent);
+                } else {
+                    inboxContainer.appendChild(task);
+                }
+            });
+
+            setupDropZones();
+            recalculateAllTotals();
+            checkInboxEmpty();
+            checkRemoveButtonStatus();
+            
+            isRestoringState = false;
+        }
+
+        function undo() {
+            if (historyStack.length === 0) return;
+            const currentState = serializeState();
+            redoStack.push(currentState);
+            const previousState = historyStack.pop();
+            restoreState(previousState);
+            updateHistoryButtons();
+        }
+
+        function redo() {
+            if (redoStack.length === 0) return;
+            const currentState = serializeState();
+            historyStack.push(currentState);
+            const nextState = redoStack.pop();
+            restoreState(nextState);
+            updateHistoryButtons();
+        }
+
+        function updateHistoryButtons() {
+            document.getElementById('btn-undo').disabled = historyStack.length === 0;
+            document.getElementById('btn-redo').disabled = redoStack.length === 0;
+        }
+
+        function initWeekGrid() {
+            const today = new Date();
+            const currentDay = today.getDay(); 
+            const distanceToMonday = (currentDay + 6) % 7;
+            const startDate = new Date(today);
+            startDate.setDate(today.getDate() - distanceToMonday);
+            
+            generateWeekRow(startDate, 0);
+            setupDropZones();
+        }
+
+        function generateWeekRow(startDate, weekIndex) {
+            const weekRow = document.createElement('div');
+            weekRow.className = 'week-row';
+            
+            const selectContainer = document.createElement('div');
+            selectContainer.className = 'week-select-container';
+            selectContainer.innerHTML = `<input type="checkbox" class="week-checkbox">`;
+            weekRow.appendChild(selectContainer);
+
+            const weekDays = document.createElement('div');
+            weekDays.className = 'week-days';
+
+            for (let i = 0; i < 7; i++) {
+                const currentDate = new Date(startDate);
+                currentDate.setDate(startDate.getDate() + i);
+
+                const dayIndex = currentDate.getDay(); 
+                const dayKey = dayKeys[dayIndex];
+                const dayName = dayNamesPt[dayKey];
+                const dateStr = formatDate(currentDate, appConfig.dateFormat);
+                
+                const globalIndex = (weekIndex * 7) + i;
+
+                const colHtml = `
+                    <div class="day-column" data-day="${dayKey}">
+                        <div class="day-header">${dayName}</div>
+                        <div class="day-date" data-timestamp="${currentDate.getTime()}" onclick="editDate(this)">${dateStr}</div>
+                        <div class="day-content droppable" id="col-${globalIndex}-${Date.now()}"></div>
+                        <div class="day-footer" id="footer-${globalIndex}-${Date.now()}">Total: <span id="total-${globalIndex}">0 min</span></div>
+                    </div>
+                `;
+                weekDays.insertAdjacentHTML('beforeend', colHtml);
+            }
+            
+            weekRow.appendChild(weekDays);
+            plannerGrid.appendChild(weekRow);
+            checkRemoveButtonStatus();
+        }
+
+        function addWeek() {
+            saveState();
+            
+            const allDates = document.querySelectorAll('.day-date');
+            let lastTimestamp = 0;
+            if (allDates.length > 0) {
+                const lastEl = allDates[allDates.length - 1];
+                lastTimestamp = parseInt(lastEl.dataset.timestamp);
+            }
+
+            const lastDate = new Date(lastTimestamp || new Date());
+            
+            const newWeekStart = new Date(lastDate);
+            let daysToAdd = (1 + 7 - lastDate.getDay()) % 7;
+            if (daysToAdd === 0) daysToAdd = 7; 
+            
+            newWeekStart.setDate(lastDate.getDate() + daysToAdd);
+
+            const currentWeeks = document.querySelectorAll('.week-row').length;
+            generateWeekRow(newWeekStart, currentWeeks);
+            setupDropZones();
+        }
+
+        function formatDate(dateObj, format) {
+            const d = dateObj.getDate().toString().padStart(2, '0');
+            const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            const y = dateObj.getFullYear();
+            if (format === 'mm/dd') return `${m}/${d}/${y}`;
+            return `${d}/${m}/${y}`;
+        }
+
+        function parseDateString(str, format) {
+            const parts = str.split('/');
+            if (parts.length < 3) return new Date(); 
+            let d, m, y;
+            if (format === 'dd/mm') {
+                d = parseInt(parts[0]); m = parseInt(parts[1]) - 1;
+            } else {
+                d = parseInt(parts[1]); m = parseInt(parts[0]) - 1;
+            }
+            y = parseInt(parts[2]);
+            if (isNaN(d) || isNaN(m) || isNaN(y)) return new Date();
+            return new Date(y, m, d);
+        }
+
+        function updateDateHeaders() {
+            const dateElements = document.querySelectorAll('.day-date');
+            dateElements.forEach(el => {
+                const ts = parseInt(el.dataset.timestamp);
+                if (!isNaN(ts)) {
+                    const date = new Date(ts);
+                    el.textContent = formatDate(date, appConfig.dateFormat);
+                }
+            });
+        }
+
+        function toggleSettings() {
+            const modal = document.getElementById('settings-modal');
+            const overlay = document.getElementById('modal-overlay');
+            if (modal.style.display === 'block') { closeAllModals(); } 
+            else { modal.style.display = 'block'; overlay.style.display = 'block'; }
+        }
+
+        function askClearAll() {
+            document.getElementById('confirm-modal').style.display = 'block';
+            document.getElementById('modal-overlay').style.display = 'block';
+            document.getElementById('settings-modal').style.display = 'none';
+        }
+
+        function confirmClear() {
+            saveState();
+            const tasks = document.querySelectorAll('.task');
+            tasks.forEach(t => t.remove());
+            recalculateAllTotals();
+            checkInboxEmpty();
+            closeAllModals();
+        }
+
+        function closeAllModals() {
+            document.getElementById('settings-modal').style.display = 'none';
+            document.getElementById('confirm-modal').style.display = 'none';
+            document.getElementById('modal-overlay').style.display = 'none';
+        }
+
+        function updateConfig() {
+            const oldFormat = appConfig.dateFormat;
+            appConfig.dateFormat = document.getElementById('cfg-date-format').value;
+            appConfig.taskUnit = document.getElementById('cfg-task-unit').value;
+            appConfig.dayUnit = document.getElementById('cfg-day-unit').value;
+            if (oldFormat !== appConfig.dateFormat) updateDateHeaders();
+            recalculateAllTotals();
+            document.querySelectorAll('.task').forEach(task => renderTaskContent(task));
+        }
+
+        function setupDraggableModal() {
+            const modal = document.getElementById('settings-modal');
+            const header = document.getElementById('settings-header');
+            let isDragging = false;
+            let startX, startY, initialLeft, initialTop;
+            header.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = modal.getBoundingClientRect();
+                modal.style.transform = 'none';
+                modal.style.left = rect.left + 'px';
+                modal.style.top = rect.top + 'px';
+                initialLeft = rect.left;
+                initialTop = rect.top;
+                header.style.cursor = 'grabbing';
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                modal.style.left = `${initialLeft + (e.clientX - startX)}px`;
+                modal.style.top = `${initialTop + (e.clientY - startY)}px`;
+            });
+            document.addEventListener('mouseup', () => { isDragging = false; header.style.cursor = 'grab'; });
+        }
+
+        function formatDuration(minutes, unitType) {
+            if (unitType === 'hour') {
+                const h = Math.floor(minutes / 60);
+                const m = minutes % 60;
+                if (h > 0 && m > 0) return `${h}h ${m}min`;
+                if (h > 0) return `${h}h`;
+                return `${m}min`;
+            }
+            return minutes + " min";
+        }
+
+        function forceCloseActiveEditor() {
+            if (activeSaveCallback) { activeSaveCallback(); activeSaveCallback = null; }
+        }
+
+        function setupSmartSelection(input) {
+            let justFocused = false;
+            input.addEventListener('focus', function() { justFocused = true; this.select(); });
+            input.addEventListener('mouseup', function(e) { if (justFocused) { e.preventDefault(); justFocused = false; } });
+            input.addEventListener('blur', function() { justFocused = false; });
+        }
+
+        function autoResizeTextarea(element) {
+            element.style.height = 'auto';
+            element.style.height = element.scrollHeight + 'px';
+        }
+
+        function editDate(element) {
+            forceCloseActiveEditor();
+            const oldText = element.textContent;
+            element.textContent = ''; 
+            const isDDMM = appConfig.dateFormat === 'dd/mm';
+            const placeholder = isDDMM ? "dd/mm/aaaa" : "mm/dd/aaaa";
+            const input = document.createElement('input');
+            input.type = 'text'; input.className = 'date-input';
+            input.value = oldText; input.placeholder = placeholder;
+            input.maxLength = 10;
+            element.appendChild(input);
+            
+            const calendarContainer = document.createElement('div');
+            calendarContainer.className = 'mini-calendar';
+            element.appendChild(calendarContainer);
+
+            let selectedDate = parseDateString(oldText, appConfig.dateFormat);
+            let viewDate = new Date(selectedDate);
+            let today = new Date();
+            
+            function renderCalendar() {
+                calendarContainer.innerHTML = '';
+                const header = document.createElement('div');
+                header.className = 'calendar-header';
+                
+                const prevBtn = document.createElement('button');
+                prevBtn.className = 'cal-nav-btn'; prevBtn.innerText = '<';
+                prevBtn.onclick = (e) => { e.stopPropagation(); viewDate.setMonth(viewDate.getMonth() - 1); renderCalendar(); };
+
+                const title = document.createElement('span');
+                title.innerText = `${monthNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+
+                const nextBtn = document.createElement('button');
+                nextBtn.className = 'cal-nav-btn'; nextBtn.innerText = '>';
+                nextBtn.onclick = (e) => { e.stopPropagation(); viewDate.setMonth(viewDate.getMonth() + 1); renderCalendar(); };
+                
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'cal-close-btn'; closeBtn.innerText = 'X';
+                closeBtn.onclick = (e) => { e.stopPropagation(); saveDate(); };
+
+                header.append(prevBtn, title, nextBtn, closeBtn);
+                calendarContainer.appendChild(header);
+
+                const grid = document.createElement('div');
+                grid.className = 'calendar-grid';
+                ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].forEach(day => {
+                    const d = document.createElement('div');
+                    d.className = 'cal-day-label'; d.innerText = day;
+                    grid.appendChild(d);
+                });
+
+                const year = viewDate.getFullYear();
+                const month = viewDate.getMonth();
+                const firstDay = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+                for (let i = 0; i < firstDay; i++) {
+                    const empty = document.createElement('div');
+                    empty.className = 'cal-day empty'; grid.appendChild(empty);
+                }
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const d = document.createElement('div');
+                    d.className = 'cal-day'; d.innerText = day;
+                    if (day === today.getDate() && month === today.getMonth() && year === today.getFullYear()) d.classList.add('today');
+                    if (day === selectedDate.getDate() && month === selectedDate.getMonth() && year === selectedDate.getFullYear()) d.classList.add('selected');
+                    d.onclick = (e) => {
+                        e.stopPropagation();
+                        selectedDate = new Date(year, month, day);
+                        const fDay = day.toString().padStart(2, '0');
+                        const fMonth = (month + 1).toString().padStart(2, '0');
+                        input.value = isDDMM ? `${fDay}/${fMonth}/${year}` : `${fMonth}/${fDay}/${year}`;
+                        saveDate(); 
+                    };
+                    grid.appendChild(d);
+                }
+                calendarContainer.appendChild(grid);
+            }
+            renderCalendar();
+            input.focus(); setupSmartSelection(input);
+            input.addEventListener('input', function(e) {
+                let v = this.value.replace(/\D/g, "");
+                if (v.length > 2) v = v.slice(0,2) + "/" + v.slice(2);
+                if (v.length > 5) v = v.slice(0,5) + "/" + v.slice(5, 9);
+                this.value = v;
+                if (v.length === 10) {
+                    const d = parseDateString(v, appConfig.dateFormat);
+                    if (!isNaN(d.getTime())) { selectedDate = d; viewDate = new Date(d); renderCalendar(); }
+                }
+            });
+
+            function saveDate() {
+                let text = input.value.trim();
+                const parts = text.split('/');
+                let isValid = false; let dateObj = null;
+                const isDDMM = appConfig.dateFormat === 'dd/mm';
+
+                if (parts.length === 3) {
+                    let p1 = parseInt(parts[0]); let p2 = parseInt(parts[1]); let year = parseInt(parts[2]);
+                    let day = isDDMM ? p1 : p2; let month = isDDMM ? p2 : p1;
+                    if (year >= 1991 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                        isValid = true;
+                        const fDay = day.toString().padStart(2, '0');
+                        const fMonth = month.toString().padStart(2, '0');
+                        text = isDDMM ? `${fDay}/${fMonth}/${year}` : `${fMonth}/${fDay}/${year}`;
+                        dateObj = new Date(year, month - 1, day);
+                    }
+                }
+                if (!isValid && text !== "") text = oldText; else if (text === "") text = "--/--/----";
+                element.textContent = text;
+                
+                if (dateObj) {
+                    element.dataset.timestamp = dateObj.getTime();
+                    const dayColumn = element.closest('.day-column');
+                    if (dayColumn) {
+                        const newDayIndex = dateObj.getDay();
+                        const newDayKey = dayKeys[newDayIndex];
+                        const newDayName = dayNamesPt[newDayKey];
+                        dayColumn.setAttribute('data-day', newDayKey);
+                        const header = dayColumn.querySelector('.day-header');
+                        if (header) header.textContent = newDayName;
+                        const content = dayColumn.querySelector('.day-content');
+                        if (content) {
+                            const tasks = content.querySelectorAll('.task');
+                            tasks.forEach(t => updateTaskColor(t, content));
+                        }
+                    }
+                }
+                activeSaveCallback = null;
+            }
+            activeSaveCallback = saveDate;
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveDate(); });
+            setTimeout(() => {
+                const bodyClickListener = function(e) {
+                    if (!element.contains(e.target)) { saveDate(); document.removeEventListener('click', bodyClickListener); }
+                };
+                document.addEventListener('click', bodyClickListener);
+            }, 100);
+        }
+
+        function checkInboxEmpty() {
+            const hasTasks = inboxContainer.querySelectorAll('.task').length > 0;
+            inboxPlaceholder.style.display = hasTasks ? 'none' : 'block';
+        }
+
+        function createTask() {
+            saveState(); 
+            forceCloseActiveEditor();
+            const task = document.createElement('div');
+            task.classList.add('task');
+            task.draggable = true;
+            task.dataset.name = "Nova Atividade";
+            task.dataset.minutes = 60;
+            renderTaskContent(task);
+            addTaskEvents(task);
+            inboxContainer.appendChild(task);
+            checkInboxEmpty();
+        }
+
+        function renderTaskContent(task) {
+            const name = task.dataset.name;
+            const minutes = parseInt(task.dataset.minutes);
+            const durationText = formatDuration(minutes, appConfig.taskUnit);
+            task.innerHTML = `
+                <span class="task-title">${name}</span>
+                <span class="task-duration">${durationText}</span>
+            `;
+        }
+
+        function addTaskEvents(task) {
+            task.addEventListener('dragstart', function(e) {
+                if (isRemoveMode) { e.preventDefault(); return; } 
+                if (task.classList.contains('editing')) { e.preventDefault(); return; }
+                saveState(); 
+                task.classList.add('dragging');
+                forceCloseActiveEditor();
+                if (selectedTask) selectedTask.classList.remove('selected');
+                selectedTask = null;
+            });
+            task.addEventListener('dragend', function() {
+                task.classList.remove('dragging');
+                dropIndicator.remove();
+                checkInboxEmpty();
+            });
+            task.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (isRemoveMode) return; 
+                if (task.classList.contains('editing')) return;
+                forceCloseActiveEditor();
+                selectTask(task);
+            });
+            task.addEventListener('dblclick', function(e) {
+                e.stopPropagation();
+                if (isRemoveMode) return; 
+                if (task.classList.contains('editing')) return;
+                enterEditMode(task);
+            });
+        }
+
+        function enterEditMode(task) {
+            forceCloseActiveEditor();
+            task.classList.add('editing');
+            task.draggable = false;
+            const currentName = task.dataset.name;
+            const currentMinutes = parseInt(task.dataset.minutes);
+
+            let timeInputsHtml = '';
+            if (appConfig.taskUnit === 'hour') {
+                const h = Math.floor(currentMinutes / 60); const m = currentMinutes % 60;
+                timeInputsHtml = `
+                    <div class="time-edit-container">
+                        <div style="flex:1"><input type="number" class="edit-input edit-hour-input" value="${h}" min="0"><span class="time-unit-label">h</span></div>
+                        <div style="flex:1"><input type="number" class="edit-input edit-min-input" value="${m}" min="0" max="59"><span class="time-unit-label">min</span></div>
+                    </div>`;
+            } else {
+                timeInputsHtml = `<input type="number" class="edit-input edit-duration-input" value="${currentMinutes}" min="0" step="1"><span class="time-unit-label">min</span>`;
+            }
+
+            task.innerHTML = `<textarea class="edit-textarea edit-title-input" rows="1">${currentName}</textarea>${timeInputsHtml}`;
+            const titleInput = task.querySelector('.edit-title-input');
+            autoResizeTextarea(titleInput);
+            titleInput.addEventListener('input', function() { autoResizeTextarea(this); });
+            setupSmartSelection(titleInput);
+            task.querySelectorAll('input[type="number"]').forEach(input => {
+                setupSmartSelection(input);
+                input.addEventListener('keydown', function(e) { if (e.key === 'Enter') saveAndExit(); });
+            });
+            titleInput.focus();
+
+            function saveAndExit() {
+                if (!task.isConnected) { activeSaveCallback = null; return; }
+                saveState(); 
+                
+                const newName = titleInput.value.trim() || "Atividade";
+                let newMinutes = 0;
+                if (appConfig.taskUnit === 'hour') {
+                    const h = parseInt(task.querySelector('.edit-hour-input').value) || 0;
+                    const m = parseInt(task.querySelector('.edit-min-input').value) || 0;
+                    newMinutes = (h * 60) + m;
+                } else {
+                    newMinutes = parseInt(task.querySelector('.edit-duration-input').value) || 0;
+                }
+                if (newMinutes < 0) newMinutes = 0;
+                task.dataset.name = newName; task.dataset.minutes = newMinutes;
+                renderTaskContent(task);
+                task.classList.remove('editing');
+                task.draggable = true;
+                recalculateAllTotals();
+                activeSaveCallback = null;
+            }
+            activeSaveCallback = saveAndExit;
+            titleInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { if (e.shiftKey) { setTimeout(() => autoResizeTextarea(titleInput), 0); } else { e.preventDefault(); saveAndExit(); } }
+            });
+            setTimeout(() => {
+                const bodyClickListener = function(e) {
+                    if (!task.contains(e.target)) { saveAndExit(); document.removeEventListener('click', bodyClickListener); }
+                };
+                document.addEventListener('click', bodyClickListener);
+            }, 100);
+        }
+
+        function selectTask(task) {
+            if (selectedTask) selectedTask.classList.remove('selected');
+            selectedTask = task;
+            selectedTask.classList.add('selected');
+        }
+        document.addEventListener('click', function(e) {
+            if (selectedTask && !e.target.closest('.task') && !e.target.closest('#btn-remove')) {
+                selectedTask.classList.remove('selected'); selectedTask = null;
+            }
+        });
+
+        function removeSelectedTask() {
+            if (selectedTask) {
+                saveState();
+                forceCloseActiveEditor();
+                const parent = selectedTask.parentElement;
+                selectedTask.remove(); selectedTask = null;
+                updateColumnTotal(parent); checkInboxEmpty();
+            } else { alert("Selecione uma atividade para remover."); }
+        }
+
+        function setupDropZones() {
+            const dropZones = document.querySelectorAll('.droppable');
+            
+            dropZones.forEach(zone => {
+                if (zone.classList.contains('initialized')) return;
+                zone.classList.add('initialized');
+
+                zone.addEventListener('dragover', function(e) {
+                    if (isRemoveMode) return;
+                    e.preventDefault(); 
+                    zone.classList.add('drag-over');
+                    
+                    const afterElement = getDragAfterElement(zone, e.clientX, e.clientY);
+                    
+                    if (afterElement == null) {
+                        zone.appendChild(dropIndicator);
+                    } else {
+                        zone.insertBefore(dropIndicator, afterElement);
+                    }
+                });
+
+                zone.addEventListener('dragleave', function() { 
+                    zone.classList.remove('drag-over'); 
+                });
+
+                zone.addEventListener('drop', function(e) {
+                    if (isRemoveMode) return;
+                    e.preventDefault(); 
+                    zone.classList.remove('drag-over');
+                    const draggingItem = document.querySelector('.dragging');
+                    if (draggingItem) {
+                        if (dropIndicator.parentNode === zone) {
+                            zone.insertBefore(draggingItem, dropIndicator);
+                        } else {
+                            zone.appendChild(draggingItem);
+                        }
+                        dropIndicator.remove();
+                        updateTaskColor(draggingItem, zone);
+                        recalculateAllTotals();
+                        checkInboxEmpty();
+                    }
+                });
+            });
+        }
+
+        function getDragAfterElement(container, x, y) {
+            const draggableElements = [...container.querySelectorAll('.task:not(.dragging)')];
+            const isHorizontal = container.id === 'inbox-container';
+
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                let offset;
+
+                if (isHorizontal) {
+                    offset = x - box.left - box.width / 2;
+                } else {
+                    offset = y - box.top - box.height / 2;
+                }
+
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        function updateTaskColor(task, container) {
+            const colorClasses = ['task-mon', 'task-tue', 'task-wed', 'task-thu', 'task-fri', 'task-sat', 'task-sun'];
+            task.classList.remove(...colorClasses);
+            if (container.id === 'inbox-container') return;
+            const parentColumn = container.closest('.day-column');
+            if (parentColumn) {
+                const day = parentColumn.getAttribute('data-day');
+                task.classList.add('task-' + day);
+            }
+        }
+
+        function updateColumnTotal(container) {
+            if (!container || container.id === 'inbox-container') return;
+            let contentDiv = container;
+            if (!contentDiv.classList.contains('day-content')) {
+                const col = container.closest('.day-column');
+                if(col) contentDiv = col.querySelector('.day-content'); else return; 
+            }
+            const tasks = contentDiv.querySelectorAll('.task');
+            let totalMin = 0;
+            tasks.forEach(task => { totalMin += parseInt(task.dataset.minutes) || 0; });
+            const parentColumn = contentDiv.closest('.day-column');
+            if(parentColumn) {
+                const footer = parentColumn.querySelector('.day-footer');
+                let displayTotal = formatDuration(totalMin, appConfig.dayUnit);
+                if (totalMin > 1440) footer.innerHTML = `<a href="#" class="overload-warning" title="Atenção: > 24h">Total: ${displayTotal}</a>`;
+                else footer.innerHTML = `Total: <span>${displayTotal}</span>`;
+            }
+        }
+
+        function recalculateAllTotals() {
+            const columns = document.querySelectorAll('.day-content');
+            columns.forEach(col => updateColumnTotal(col));
+        }
+    </script>
+</body>
+</html>

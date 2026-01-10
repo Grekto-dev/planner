@@ -32,7 +32,7 @@ Você pode ajustar o planner ao seu estilo:
 
 Não é necessária nenhuma instalação de dependências (npm, node, etc) ou servidor local!
 
-1.  **Baixe** o arquivo `planner_v1.1.html` (ou clone este repositório).
+1.  **Baixe** o arquivo `planner.html` (ou clone este repositório).
 2.  **Abra** o arquivo diretamente em seu navegador web preferido (Chrome, Edge, Firefox, Safari).
 3.  **Comece a planejar!**
 
@@ -71,7 +71,7 @@ O repositório consiste essencialmente em um único arquivo principal:
 
 ```text
 /
-└── planner_v1.1.html  # Contém toda a lógica (JS), estilos (CSS) e estrutura (HTML)
+└── planner.html  # Contém toda a lógica (JS), estilos (CSS) e estrutura (HTML)
 ```
 
 ## 📝 Créditos

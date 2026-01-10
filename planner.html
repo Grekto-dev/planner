@@ -315,7 +315,7 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
             padding: 10px;
             z-index: 2000;
-            width: 200px;
+            width: 220px;
             font-family: 'Segoe UI', sans-serif;
             color: #333;
             margin-top: 5px;
@@ -329,6 +329,16 @@
             margin-bottom: 8px;
             font-size: 13px;
             font-weight: bold;
+        }
+        
+        .calendar-title {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .calendar-title:hover {
+            background-color: #eee;
         }
 
         .cal-nav-btn {
@@ -374,6 +384,53 @@
         .cal-day.today { border: 1px solid #28a745; color: #28a745; font-weight: bold; }
         .cal-day.selected { background-color: #007bff; color: white; }
         .cal-day.empty { pointer-events: none; }
+
+        /* Estilos do Seletor de Mês/Ano */
+        .month-picker-container {
+            max-height: 200px;
+            overflow-y: auto;
+            border-top: 1px solid #eee;
+            margin-top: 5px;
+            padding-top: 5px;
+            text-align: left;
+        }
+
+        .picker-year-block {
+            margin-bottom: 10px;
+        }
+
+        .picker-year-title {
+            font-weight: bold;
+            font-size: 14px;
+            padding: 5px 10px;
+            background: #f8f9fa;
+            position: sticky;
+            top: 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .picker-months-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px;
+            padding: 5px;
+        }
+
+        .picker-month-item {
+            padding: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .picker-month-item:hover {
+            background-color: #f0f0f0;
+        }
+        .picker-month-item.active-browsing {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
 
         .day-column[data-day="mon"] .day-header, .day-column[data-day="mon"] .day-date { background-color: var(--col-mon); }
         .day-column[data-day="tue"] .day-header, .day-column[data-day="tue"] .day-date { background-color: var(--col-tue); }
@@ -616,7 +673,7 @@
     </style>
 </head>
 <body>
-    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.0.0.</div>
+    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.1.0.</div>
     <header>
         <h1>Planner Semanal</h1>
         <div class="btn-group">
@@ -661,16 +718,16 @@
         <div class="settings-group">
             <label>Unidade da Atividade (Edição):</label>
             <select id="cfg-task-unit" onchange="updateConfig()">
-                <option value="min">Minutos</option>
-                <option value="hour">Horas + Minutos</option>
+                <option value="min">Minutos + Segundos</option>
+                <option value="hour">Horas + Minutos + Segundos</option>
             </select>
         </div>
 
         <div class="settings-group">
             <label>Unidade do Total do Dia:</label>
             <select id="cfg-day-unit" onchange="updateConfig()">
-                <option value="min">Minutos</option>
-                <option value="hour">Horas + Minutos</option>
+                <option value="min">Minutos + Segundos</option>
+                <option value="hour">Horas + Minutos + Segundos</option>
             </select>
         </div>
     </div>
@@ -949,7 +1006,7 @@
             document.querySelectorAll('.task').forEach(t => {
                 tasks.push({
                     name: t.dataset.name,
-                    minutes: t.dataset.minutes,
+                    seconds: t.dataset.seconds,
                     parentId: t.parentElement.id
                 });
             });
@@ -1032,7 +1089,7 @@
                 task.classList.add('task');
                 task.draggable = true;
                 task.dataset.name = tData.name;
-                task.dataset.minutes = tData.minutes;
+                task.dataset.seconds = tData.seconds || (tData.minutes ? tData.minutes * 60 : 3600);
                 
                 renderTaskContent(task);
                 addTaskEvents(task);
@@ -1246,15 +1303,23 @@
             document.addEventListener('mouseup', () => { isDragging = false; header.style.cursor = 'grab'; });
         }
 
-        function formatDuration(minutes, unitType) {
+        function formatDuration(totalSeconds, unitType) {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+
             if (unitType === 'hour') {
-                const h = Math.floor(minutes / 60);
-                const m = minutes % 60;
-                if (h > 0 && m > 0) return `${h}h ${m}min`;
-                if (h > 0) return `${h}h`;
-                return `${m}min`;
+                let parts = [];
+                if (h > 0) parts.push(`${h}h`);
+                if (m > 0 || (h > 0 && s > 0)) parts.push(`${m}min`);
+                if (s > 0) parts.push(`${s}s`);
+                if (parts.length === 0) return "0 min";
+                return parts.join(" ");
+            } else {
+                const totalMin = Math.floor(totalSeconds / 60);
+                if (s === 0) return `${totalMin} min`;
+                return `${totalMin} min ${s}s`;
             }
-            return minutes + " min";
         }
 
         function forceCloseActiveEditor() {
@@ -1279,6 +1344,7 @@
             element.textContent = ''; 
             const isDDMM = appConfig.dateFormat === 'dd/mm';
             const placeholder = isDDMM ? "dd/mm/aaaa" : "mm/dd/aaaa";
+            
             const input = document.createElement('input');
             input.type = 'text'; input.className = 'date-input';
             input.value = oldText; input.placeholder = placeholder;
@@ -1292,22 +1358,54 @@
             let selectedDate = parseDateString(oldText, appConfig.dateFormat);
             let viewDate = new Date(selectedDate);
             let today = new Date();
-            
+            let isMonthPickerOpen = false;
+            let minYearLoaded = viewDate.getFullYear();
+            let maxYearLoaded = viewDate.getFullYear();
+
             function renderCalendar() {
                 calendarContainer.innerHTML = '';
+                
                 const header = document.createElement('div');
                 header.className = 'calendar-header';
                 
                 const prevBtn = document.createElement('button');
                 prevBtn.className = 'cal-nav-btn'; prevBtn.innerText = '<';
-                prevBtn.onclick = (e) => { e.stopPropagation(); viewDate.setMonth(viewDate.getMonth() - 1); renderCalendar(); };
+                prevBtn.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    if (isMonthPickerOpen) {
+                         viewDate.setFullYear(viewDate.getFullYear() - 1);
+                         renderCalendar();
+                    } else {
+                         viewDate.setMonth(viewDate.getMonth() - 1); 
+                         renderCalendar();
+                    }
+                };
 
                 const title = document.createElement('span');
-                title.innerText = `${monthNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+                title.className = 'calendar-title';
+                title.innerText = isMonthPickerOpen ? `Selecionar Data` : `${monthNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+                title.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    isMonthPickerOpen = !isMonthPickerOpen;
+                    if (isMonthPickerOpen) {
+                        minYearLoaded = viewDate.getFullYear();
+                        maxYearLoaded = viewDate.getFullYear();
+                    }
+                    renderCalendar(); 
+                };
 
                 const nextBtn = document.createElement('button');
                 nextBtn.className = 'cal-nav-btn'; nextBtn.innerText = '>';
-                nextBtn.onclick = (e) => { e.stopPropagation(); viewDate.setMonth(viewDate.getMonth() + 1); renderCalendar(); };
+                nextBtn.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    if (isMonthPickerOpen) {
+                         viewDate.setFullYear(viewDate.getFullYear() + 1);
+                         renderCalendar();
+                    } else {
+                         viewDate.setMonth(viewDate.getMonth() + 1); 
+                         renderCalendar();
+                    }
+                };
                 
                 const closeBtn = document.createElement('button');
                 closeBtn.className = 'cal-close-btn'; closeBtn.innerText = 'X';
@@ -1316,6 +1414,14 @@
                 header.append(prevBtn, title, nextBtn, closeBtn);
                 calendarContainer.appendChild(header);
 
+                if (isMonthPickerOpen) {
+                    renderMonthPicker();
+                } else {
+                    renderGrid();
+                }
+            }
+
+            function renderGrid() {
                 const grid = document.createElement('div');
                 grid.className = 'calendar-grid';
                 ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].forEach(day => {
@@ -1351,8 +1457,91 @@
                 }
                 calendarContainer.appendChild(grid);
             }
+
+            function renderMonthPicker() {
+                const picker = document.createElement('div');
+                picker.className = 'month-picker-container';
+                
+                const listContainer = document.createElement('div');
+                listContainer.className = 'picker-list';
+                picker.appendChild(listContainer);
+
+                let loading = false;
+
+                function createYearElement(year) {
+                    const block = document.createElement('div');
+                    block.className = 'picker-year-block';
+                    block.dataset.year = year;
+                    
+                    const yTitle = document.createElement('div');
+                    yTitle.className = 'picker-year-title';
+                    yTitle.innerText = year;
+                    block.appendChild(yTitle);
+
+                    const mGrid = document.createElement('div');
+                    mGrid.className = 'picker-months-grid';
+                    
+                    monthNames.forEach((name, idx) => {
+                        const mItem = document.createElement('div');
+                        mItem.className = 'picker-month-item';
+                        mItem.innerText = name;
+                        
+                        if (year === viewDate.getFullYear() && idx === viewDate.getMonth()) {
+                            mItem.classList.add('active-browsing');
+                        }
+
+                        mItem.onclick = (e) => {
+                            e.stopPropagation();
+                            viewDate.setFullYear(year);
+                            viewDate.setMonth(idx);
+                            isMonthPickerOpen = false;
+                            renderCalendar();
+                        };
+                        mGrid.appendChild(mItem);
+                    });
+
+                    block.appendChild(mGrid);
+                    return block;
+                }
+
+                for (let y = minYearLoaded - 1; y <= maxYearLoaded + 1; y++) {
+                    listContainer.appendChild(createYearElement(y));
+                }
+                minYearLoaded--;
+                maxYearLoaded++;
+
+                picker.onscroll = () => {
+                    if (loading) return;
+
+                    if (picker.scrollTop + picker.clientHeight >= picker.scrollHeight - 50) {
+                        loading = true;
+                        maxYearLoaded++;
+                        listContainer.appendChild(createYearElement(maxYearLoaded));
+                        loading = false;
+                    }
+                    
+                    if (picker.scrollTop <= 50) {
+                        loading = true;
+                        minYearLoaded--;
+                        const newYear = createYearElement(minYearLoaded);
+                        const oldHeight = picker.scrollHeight;
+                        listContainer.prepend(newYear);
+                        picker.scrollTop += (picker.scrollHeight - oldHeight);
+                        loading = false;
+                    }
+                };
+
+                calendarContainer.appendChild(picker);
+                
+                setTimeout(() => {
+                    const currentYearBlock = listContainer.querySelector(`[data-year="${viewDate.getFullYear()}"]`);
+                    if (currentYearBlock) currentYearBlock.scrollIntoView({ block: 'start' });
+                }, 0);
+            }
+
             renderCalendar();
             input.focus(); setupSmartSelection(input);
+            
             input.addEventListener('input', function(e) {
                 let v = this.value.replace(/\D/g, "");
                 if (v.length > 2) v = v.slice(0,2) + "/" + v.slice(2);
@@ -1373,7 +1562,7 @@
                 if (parts.length === 3) {
                     let p1 = parseInt(parts[0]); let p2 = parseInt(parts[1]); let year = parseInt(parts[2]);
                     let day = isDDMM ? p1 : p2; let month = isDDMM ? p2 : p1;
-                    if (year >= 1991 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                    if (year >= 1900 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
                         isValid = true;
                         const fDay = day.toString().padStart(2, '0');
                         const fMonth = month.toString().padStart(2, '0');
@@ -1403,6 +1592,7 @@
                 }
                 activeSaveCallback = null;
             }
+            
             activeSaveCallback = saveDate;
             input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveDate(); });
             setTimeout(() => {
@@ -1425,7 +1615,7 @@
             task.classList.add('task');
             task.draggable = true;
             task.dataset.name = "Nova Atividade";
-            task.dataset.minutes = 60;
+            task.dataset.seconds = 3600; 
             renderTaskContent(task);
             addTaskEvents(task);
             inboxContainer.appendChild(task);
@@ -1434,8 +1624,8 @@
 
         function renderTaskContent(task) {
             const name = task.dataset.name;
-            const minutes = parseInt(task.dataset.minutes);
-            const durationText = formatDuration(minutes, appConfig.taskUnit);
+            const seconds = parseInt(task.dataset.seconds);
+            const durationText = formatDuration(seconds, appConfig.taskUnit);
             task.innerHTML = `
                 <span class="task-title">${name}</span>
                 <span class="task-duration">${durationText}</span>
@@ -1477,18 +1667,27 @@
             task.classList.add('editing');
             task.draggable = false;
             const currentName = task.dataset.name;
-            const currentMinutes = parseInt(task.dataset.minutes);
+            const currentSeconds = parseInt(task.dataset.seconds);
 
             let timeInputsHtml = '';
+            const h = Math.floor(currentSeconds / 3600);
+            const m = Math.floor((currentSeconds % 3600) / 60);
+            const s = currentSeconds % 60;
+
             if (appConfig.taskUnit === 'hour') {
-                const h = Math.floor(currentMinutes / 60); const m = currentMinutes % 60;
                 timeInputsHtml = `
                     <div class="time-edit-container">
                         <div style="flex:1"><input type="number" class="edit-input edit-hour-input" value="${h}" min="0"><span class="time-unit-label">h</span></div>
                         <div style="flex:1"><input type="number" class="edit-input edit-min-input" value="${m}" min="0" max="59"><span class="time-unit-label">min</span></div>
+                        <div style="flex:1"><input type="number" class="edit-input edit-sec-input" value="${s}" min="0" max="59"><span class="time-unit-label">s</span></div>
                     </div>`;
             } else {
-                timeInputsHtml = `<input type="number" class="edit-input edit-duration-input" value="${currentMinutes}" min="0" step="1"><span class="time-unit-label">min</span>`;
+                const totalMin = Math.floor(currentSeconds / 60);
+                timeInputsHtml = `
+                    <div class="time-edit-container">
+                        <div style="flex:1.5"><input type="number" class="edit-input edit-min-input" value="${totalMin}" min="0"><span class="time-unit-label">min</span></div>
+                        <div style="flex:1"><input type="number" class="edit-input edit-sec-input" value="${s}" min="0" max="59"><span class="time-unit-label">s</span></div>
+                    </div>`;
             }
 
             task.innerHTML = `<textarea class="edit-textarea edit-title-input" rows="1">${currentName}</textarea>${timeInputsHtml}`;
@@ -1507,16 +1706,19 @@
                 saveState(); 
                 
                 const newName = titleInput.value.trim() || "Atividade";
-                let newMinutes = 0;
+                let newSeconds = 0;
                 if (appConfig.taskUnit === 'hour') {
-                    const h = parseInt(task.querySelector('.edit-hour-input').value) || 0;
-                    const m = parseInt(task.querySelector('.edit-min-input').value) || 0;
-                    newMinutes = (h * 60) + m;
+                    const h_val = parseInt(task.querySelector('.edit-hour-input').value) || 0;
+                    const m_val = parseInt(task.querySelector('.edit-min-input').value) || 0;
+                    const s_val = parseInt(task.querySelector('.edit-sec-input').value) || 0;
+                    newSeconds = (h_val * 3600) + (m_val * 60) + s_val;
                 } else {
-                    newMinutes = parseInt(task.querySelector('.edit-duration-input').value) || 0;
+                    const m_val = parseInt(task.querySelector('.edit-min-input').value) || 0;
+                    const s_val = parseInt(task.querySelector('.edit-sec-input').value) || 0;
+                    newSeconds = (m_val * 60) + s_val;
                 }
-                if (newMinutes < 0) newMinutes = 0;
-                task.dataset.name = newName; task.dataset.minutes = newMinutes;
+                if (newSeconds < 0) newSeconds = 0;
+                task.dataset.name = newName; task.dataset.seconds = newSeconds;
                 renderTaskContent(task);
                 task.classList.remove('editing');
                 task.draggable = true;
@@ -1642,13 +1844,13 @@
                 if(col) contentDiv = col.querySelector('.day-content'); else return; 
             }
             const tasks = contentDiv.querySelectorAll('.task');
-            let totalMin = 0;
-            tasks.forEach(task => { totalMin += parseInt(task.dataset.minutes) || 0; });
+            let totalSec = 0;
+            tasks.forEach(task => { totalSec += parseInt(task.dataset.seconds) || 0; });
             const parentColumn = contentDiv.closest('.day-column');
             if(parentColumn) {
                 const footer = parentColumn.querySelector('.day-footer');
-                let displayTotal = formatDuration(totalMin, appConfig.dayUnit);
-                if (totalMin > 1440) footer.innerHTML = `<a href="#" class="overload-warning" title="Atenção: > 24h">Total: ${displayTotal}</a>`;
+                let displayTotal = formatDuration(totalSec, appConfig.dayUnit);
+                if (totalSec > 86400) footer.innerHTML = `<a href="#" class="overload-warning" title="Atenção: > 24h">Total: ${displayTotal}</a>`;
                 else footer.innerHTML = `Total: <span>${displayTotal}</span>`;
             }
         }

@@ -34,7 +34,7 @@
             flex-direction: column;
             min-height: 100vh;
             box-sizing: border-box;
-            min-width: 1200px;
+            min-width: 1350px;
         }
 
         header {
@@ -50,6 +50,14 @@
             gap: 10px;
             flex-wrap: wrap;
             justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .btn-row-2 {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 5px;
         }
 
         button {
@@ -99,6 +107,9 @@
             font-size: 20px;
             padding: 0 15px;
         }
+
+        #btn-prev-day, #btn-next-day { background-color: #007bff; }
+        #btn-strikethrough { background-color: #6f42c1; font-style: italic; text-decoration: line-through; }
 
         .controls-hint {
             font-size: 13px;
@@ -178,7 +189,7 @@
         #inbox-container {
             background-color: white;
             border: 3px dashed #ccc;
-            padding: 15px;
+            padding: 35px 15px 15px 15px;
             min-height: 100px;
             display: flex;
             gap: 15px;
@@ -203,6 +214,19 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+        }
+
+        #inbox-total-badge {
+            position: absolute;
+            top: 8px;
+            left: 12px;
+            background-color: #e9ecef;
+            color: #555;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            border: 1px solid #ccc;
         }
 
         #planner-grid {
@@ -385,7 +409,6 @@
         .cal-day.selected { background-color: #007bff; color: white; }
         .cal-day.empty { pointer-events: none; }
 
-        /* Estilos do Seletor de Mês/Ano */
         .month-picker-container {
             max-height: 200px;
             overflow-y: auto;
@@ -506,7 +529,10 @@
             transition: all 0.1s;
         }
 
-        #inbox-container .task { width: 140px; margin: 0; }
+        #inbox-container .task { 
+            width: 180px; 
+            margin: 0; 
+        }
         
         #inbox-container .drop-indicator { 
             width: 6px; 
@@ -521,6 +547,10 @@
             line-height: 1.3;
             word-break: break-word;
             white-space: pre-wrap; 
+        }
+
+        .task-title.strikethrough {
+            text-decoration: line-through;
         }
 
         .task-duration {
@@ -673,15 +703,15 @@
     </style>
 </head>
 <body>
-    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.1.1.</div>
+    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.2.0.</div>
     <header>
         <h1>Planner Semanal</h1>
         <div class="btn-group">
             <button id="btn-undo" onclick="undo()" title="Desfazer" disabled>↶</button>
             <button id="btn-redo" onclick="redo()" title="Refazer" disabled>↷</button>
             <div style="width: 10px;"></div>
-            <button id="btn-add" onclick="createTask()">+ Atividade</button>
-            <button id="btn-remove" onclick="removeSelectedTask()">- Atividade</button>
+            <button id="btn-add" onclick="createTask()">Adicionar</button>
+            <button id="btn-remove" onclick="removeSelectedTask()">Excluir</button>
             <button id="btn-clear" onclick="askClearAll()" title="Limpar tudo">🧹 Limpar</button>
             <button id="btn-add-week" onclick="addWeek()" title="Adicionar Próxima Semana">+ Semana</button>
             <button id="btn-rm-week" onclick="handleRemoveWeekClick()" title="Remover Semanas">- Semana</button>
@@ -692,8 +722,16 @@
             <input type="file" id="file-input" accept=".json" style="display: none;" onchange="loadFromFile(event)">
             <button id="btn-settings" onclick="toggleSettings()" title="Configurações">⚙️</button>
         </div>
+        
+        <div class="btn-row-2">
+            <button id="btn-prev-day" onclick="shiftAllDates(-1)" title="Voltar 1 Dia">-1 Dia</button>
+            <button id="btn-next-day" onclick="shiftAllDates(1)" title="Avançar 1 Dia">+1 Dia</button>
+            <button id="btn-strikethrough" onclick="toggleStrikethrough()" title="Tachar Texto"><s>S</s></button>
+        </div>
+
         <div class="controls-hint">
             Clique 1x para editar Datas ou Selecionar Atividade.<br>
+            Shift + Clique para selecionar múltiplas atividades.<br>
             Clique 2x na Atividade para editar (Enter salva, Shift+Enter quebra linha).<br>
             Arraste para reordenar (aproxime das bordas para rolar).
         </div>
@@ -744,13 +782,14 @@
     </div>
 
     <div id="inbox-container" class="droppable" data-day="inbox">
+        <span id="inbox-total-badge">Inbox: 0 min</span>
         <span class="inbox-label" id="inbox-placeholder">Novas atividades surgem aqui...</span>
     </div>
 
     <div id="planner-grid"></div>
 
     <script>
-        let selectedTask = null;
+        let selectedTasks = [];
         let activeSaveCallback = null;
         let isRemoveMode = false;
         
@@ -778,12 +817,10 @@
         let inboxPlaceholder = document.getElementById('inbox-placeholder');
         const plannerGrid = document.getElementById('planner-grid');
 
-        // Scroll Logic Vars
         let autoScrollInterval = null;
         let currentScrollSpeed = 0;
-        const SCROLL_ZONE_SIZE = 100; // Increased zone size for easier triggering
+        const SCROLL_ZONE_SIZE = 100;
 
-        // Global Unload Listener
         window.addEventListener('beforeunload', function (e) {
             e.preventDefault();
             e.returnValue = 'Você tem alterações não salvas.';
@@ -803,14 +840,12 @@
             });
         };
 
-        // Improved Auto-scroll handler
         document.addEventListener('dragover', function(e) {
             e.preventDefault();
             
             const y = e.clientY;
             const h = window.innerHeight;
             
-            // Calculate speed
             if (y < SCROLL_ZONE_SIZE) {
                 currentScrollSpeed = -15; 
             } else if (y > h - SCROLL_ZONE_SIZE) {
@@ -819,7 +854,6 @@
                 currentScrollSpeed = 0;
             }
 
-            // Manage Interval without constant resetting
             if (currentScrollSpeed !== 0) {
                 if (!autoScrollInterval) {
                     autoScrollInterval = setInterval(() => {
@@ -892,7 +926,7 @@
         }
 
         function toggleOtherButtons(disabled) {
-            const buttons = document.querySelectorAll('.btn-group button:not(#btn-rm-week)');
+            const buttons = document.querySelectorAll('.btn-group button:not(#btn-rm-week), .btn-row-2 button');
             buttons.forEach(b => b.disabled = disabled);
             if (!disabled) updateHistoryButtons();
         }
@@ -962,6 +996,8 @@
         }
 
         function saveAsImage() {
+            clearSelection();
+            
             const header = document.querySelector('header');
             const inbox = document.getElementById('inbox-container');
             const createdBy = document.querySelector('.canto-esquerdo');
@@ -1050,10 +1086,14 @@
         function serializeState() {
             const tasks = [];
             document.querySelectorAll('.task').forEach(t => {
+                const titleEl = t.querySelector('.task-title');
+                const isStrikethrough = titleEl ? titleEl.classList.contains('strikethrough') : false;
+
                 tasks.push({
                     name: t.dataset.name,
                     seconds: t.dataset.seconds,
-                    parentId: t.parentElement.id
+                    parentId: t.parentElement.id,
+                    isStrikethrough: isStrikethrough
                 });
             });
 
@@ -1075,7 +1115,7 @@
             isRestoringState = true;
             forceCloseActiveEditor();
             if (isRemoveMode) exitRemoveMode();
-            selectedTask = null;
+            selectedTasks = [];
 
             if (state.config) {
                 appConfig.dateFormat = state.config.dateFormat || 'dd/mm';
@@ -1088,13 +1128,11 @@
             }
 
             plannerGrid.innerHTML = ''; 
-            inboxContainer.innerHTML = '';
-            const placeholder = document.createElement('span');
-            placeholder.className = 'inbox-label';
-            placeholder.id = 'inbox-placeholder';
-            placeholder.textContent = 'Novas atividades surgem aqui...';
-            inboxContainer.appendChild(placeholder);
-            inboxPlaceholder = placeholder;
+            inboxContainer.innerHTML = `
+                <span id="inbox-total-badge">Inbox: 0 min</span>
+                <span class="inbox-label" id="inbox-placeholder">Novas atividades surgem aqui...</span>
+            `;
+            inboxPlaceholder = document.getElementById('inbox-placeholder');
 
             const totalWeeks = Math.ceil(state.columns.length / 7);
             
@@ -1138,7 +1176,7 @@
                 task.dataset.name = tData.name;
                 task.dataset.seconds = tData.seconds || (tData.minutes ? tData.minutes * 60 : 3600);
                 
-                renderTaskContent(task);
+                renderTaskContent(task, tData.isStrikethrough);
                 addTaskEvents(task);
 
                 const parent = document.getElementById(tData.parentId);
@@ -1287,6 +1325,40 @@
             });
         }
 
+        function shiftAllDates(daysToShift) {
+            saveState();
+            const dateElements = document.querySelectorAll('.day-date');
+            
+            dateElements.forEach(el => {
+                const ts = parseInt(el.dataset.timestamp);
+                if (!isNaN(ts)) {
+                    const oldDate = new Date(ts);
+                    const newDate = new Date(oldDate);
+                    newDate.setDate(oldDate.getDate() + daysToShift);
+                    
+                    el.dataset.timestamp = newDate.getTime();
+                    el.textContent = formatDate(newDate, appConfig.dateFormat);
+
+                    const newDayIndex = newDate.getDay();
+                    const newDayKey = dayKeys[newDayIndex];
+                    const newDayName = dayNamesPt[newDayKey];
+                    
+                    const dayColumn = el.closest('.day-column');
+                    if (dayColumn) {
+                        dayColumn.setAttribute('data-day', newDayKey);
+                        const header = dayColumn.querySelector('.day-header');
+                        if (header) header.textContent = newDayName;
+                        
+                        const content = dayColumn.querySelector('.day-content');
+                        if (content) {
+                            const tasks = content.querySelectorAll('.task');
+                            tasks.forEach(t => updateTaskColor(t, content));
+                        }
+                    }
+                }
+            });
+        }
+
         function toggleSettings() {
             const modal = document.getElementById('settings-modal');
             const overlay = document.getElementById('modal-overlay');
@@ -1304,6 +1376,7 @@
             saveState();
             const tasks = document.querySelectorAll('.task');
             tasks.forEach(t => t.remove());
+            selectedTasks = []; 
             recalculateAllTotals();
             checkInboxEmpty();
             closeAllModals();
@@ -1322,7 +1395,11 @@
             appConfig.dayUnit = document.getElementById('cfg-day-unit').value;
             if (oldFormat !== appConfig.dateFormat) updateDateHeaders();
             recalculateAllTotals();
-            document.querySelectorAll('.task').forEach(task => renderTaskContent(task));
+            document.querySelectorAll('.task').forEach(task => {
+                const titleEl = task.querySelector('.task-title');
+                const isStrikethrough = titleEl ? titleEl.classList.contains('strikethrough') : false;
+                renderTaskContent(task, isStrikethrough);
+            });
         }
 
         function setupDraggableModal() {
@@ -1668,14 +1745,16 @@
             addTaskEvents(task);
             inboxContainer.appendChild(task);
             checkInboxEmpty();
+            recalculateAllTotals();
         }
 
-        function renderTaskContent(task) {
+        function renderTaskContent(task, isStrikethrough = false) {
             const name = task.dataset.name;
             const seconds = parseInt(task.dataset.seconds);
             const durationText = formatDuration(seconds, appConfig.taskUnit);
+            const strikethroughClass = isStrikethrough ? 'strikethrough' : '';
             task.innerHTML = `
-                <span class="task-title">${name}</span>
+                <span class="task-title ${strikethroughClass}">${name}</span>
                 <span class="task-duration">${durationText}</span>
             `;
         }
@@ -1687,20 +1766,23 @@
                 saveState(); 
                 task.classList.add('dragging');
                 forceCloseActiveEditor();
-                if (selectedTask) selectedTask.classList.remove('selected');
-                selectedTask = null;
+                
+                if (!selectedTasks.includes(task)) {
+                    clearSelection();
+                }
             });
             task.addEventListener('dragend', function() {
                 task.classList.remove('dragging');
                 dropIndicator.remove();
                 checkInboxEmpty();
+                recalculateAllTotals();
             });
             task.addEventListener('click', function(e) {
                 e.stopPropagation();
                 if (isRemoveMode) return; 
                 if (task.classList.contains('editing')) return;
                 forceCloseActiveEditor();
-                selectTask(task);
+                selectTask(task, e);
             });
             task.addEventListener('dblclick', function(e) {
                 e.stopPropagation();
@@ -1716,6 +1798,8 @@
             task.draggable = false;
             const currentName = task.dataset.name;
             const currentSeconds = parseInt(task.dataset.seconds);
+            const titleEl = task.querySelector('.task-title');
+            const isStrikethrough = titleEl ? titleEl.classList.contains('strikethrough') : false;
 
             let timeInputsHtml = '';
             const h = Math.floor(currentSeconds / 3600);
@@ -1767,7 +1851,9 @@
                 }
                 if (newSeconds < 0) newSeconds = 0;
                 task.dataset.name = newName; task.dataset.seconds = newSeconds;
-                renderTaskContent(task);
+                
+                renderTaskContent(task, isStrikethrough);
+                
                 task.classList.remove('editing');
                 task.draggable = true;
                 recalculateAllTotals();
@@ -1785,25 +1871,66 @@
             }, 100);
         }
 
-        function selectTask(task) {
-            if (selectedTask) selectedTask.classList.remove('selected');
-            selectedTask = task;
-            selectedTask.classList.add('selected');
+        function selectTask(task, event) {
+            if (event && event.shiftKey) {
+                if (selectedTasks.includes(task)) {
+                    task.classList.remove('selected');
+                    selectedTasks = selectedTasks.filter(t => t !== task);
+                } else {
+                    task.classList.add('selected');
+                    selectedTasks.push(task);
+                }
+            } else {
+                clearSelection();
+                task.classList.add('selected');
+                selectedTasks = [task];
+            }
         }
+
+        function clearSelection() {
+            selectedTasks.forEach(t => t.classList.remove('selected'));
+            selectedTasks = [];
+        }
+
         document.addEventListener('click', function(e) {
-            if (selectedTask && !e.target.closest('.task') && !e.target.closest('#btn-remove')) {
-                selectedTask.classList.remove('selected'); selectedTask = null;
+            if (!e.target.closest('.task') && 
+                !e.target.closest('#btn-remove') && 
+                !e.target.closest('#btn-strikethrough')) {
+                clearSelection();
             }
         });
 
         function removeSelectedTask() {
-            if (selectedTask) {
+            if (selectedTasks.length > 0) {
                 saveState();
                 forceCloseActiveEditor();
-                const parent = selectedTask.parentElement;
-                selectedTask.remove(); selectedTask = null;
-                updateColumnTotal(parent); checkInboxEmpty();
-            } else { alert("Selecione uma atividade para remover."); }
+                
+                selectedTasks.forEach(task => {
+                    const parent = task.parentElement;
+                    task.remove();
+                    updateColumnTotal(parent);
+                });
+                
+                selectedTasks = [];
+                checkInboxEmpty();
+                recalculateAllTotals();
+            } else { 
+                alert("Selecione pelo menos uma atividade para remover."); 
+            }
+        }
+
+        function toggleStrikethrough() {
+            if (selectedTasks.length > 0) {
+                saveState();
+                selectedTasks.forEach(task => {
+                    const titleEl = task.querySelector('.task-title');
+                    if (titleEl) {
+                        titleEl.classList.toggle('strikethrough');
+                    }
+                });
+            } else {
+                alert("Selecione atividades para tachar.");
+            }
         }
 
         function setupDropZones() {
@@ -1854,9 +1981,7 @@
         function getDragAfterElement(container, x, y) {
             const draggableElements = [...container.querySelectorAll('.task:not(.dragging)')];
             
-            // Logic for Grid (Inbox) vs List (Days)
             if (container.id === 'inbox-container') {
-                // For grid (Inbox), find closest element by Euclidean distance
                 let closestElement = null;
                 let minDistance = Number.POSITIVE_INFINITY;
 
@@ -1873,9 +1998,8 @@
                     }
                 });
                 
-                if (!closestElement) return null; // Append to end if no close element
+                if (!closestElement) return null; 
                 
-                // Determine if insert before or after closest element
                 const box = closestElement.getBoundingClientRect();
                 const centerX = box.left + box.width / 2;
                 
@@ -1886,7 +2010,6 @@
                 }
 
             } else {
-                // Vertical List Logic (Days) - standard offset based
                 return draggableElements.reduce((closest, child) => {
                     const box = child.getBoundingClientRect();
                     const offset = y - box.top - box.height / 2;
@@ -1911,7 +2034,18 @@
         }
 
         function updateColumnTotal(container) {
-            if (!container || container.id === 'inbox-container') return;
+            if (!container) return;
+
+            if (container.id === 'inbox-container') {
+                const tasks = container.querySelectorAll('.task');
+                let totalSec = 0;
+                tasks.forEach(task => { totalSec += parseInt(task.dataset.seconds) || 0; });
+                const badge = document.getElementById('inbox-total-badge');
+                const displayTotal = formatDuration(totalSec, appConfig.dayUnit);
+                if (badge) badge.textContent = `Inbox: ${displayTotal}`;
+                return;
+            }
+
             let contentDiv = container;
             if (!contentDiv.classList.contains('day-content')) {
                 const col = container.closest('.day-column');
@@ -1932,6 +2066,7 @@
         function recalculateAllTotals() {
             const columns = document.querySelectorAll('.day-content');
             columns.forEach(col => updateColumnTotal(col));
+            updateColumnTotal(inboxContainer);
         }
     </script>
 </body>

@@ -108,6 +108,7 @@
             padding: 0 15px;
         }
 
+        #btn-duplicate { background-color: #4682b4; }
         #btn-prev-day, #btn-next-day { background-color: #007bff; }
         #btn-strikethrough { background-color: #6f42c1; font-style: italic; text-decoration: line-through; }
 
@@ -703,7 +704,7 @@
     </style>
 </head>
 <body>
-    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.2.0.</div>
+    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.3.0.</div>
     <header>
         <h1>Planner Semanal</h1>
         <div class="btn-group">
@@ -724,6 +725,7 @@
         </div>
         
         <div class="btn-row-2">
+            <button id="btn-duplicate" onclick="duplicateSelectedTasks()" title="Duplicar Selecionados">Duplicar</button>
             <button id="btn-prev-day" onclick="shiftAllDates(-1)" title="Voltar 1 Dia">-1 Dia</button>
             <button id="btn-next-day" onclick="shiftAllDates(1)" title="Avançar 1 Dia">+1 Dia</button>
             <button id="btn-strikethrough" onclick="toggleStrikethrough()" title="Tachar Texto"><s>S</s></button>
@@ -1748,6 +1750,36 @@
             recalculateAllTotals();
         }
 
+        function duplicateSelectedTasks() {
+            if (selectedTasks.length === 0) {
+                alert("Selecione pelo menos uma atividade para duplicar.");
+                return;
+            }
+            
+            saveState();
+            
+            selectedTasks.forEach(task => {
+                const newTask = document.createElement('div');
+                newTask.classList.add('task');
+                newTask.draggable = true;
+                newTask.dataset.name = task.dataset.name;
+                newTask.dataset.seconds = task.dataset.seconds;
+                
+                const titleEl = task.querySelector('.task-title');
+                const isStrikethrough = titleEl ? titleEl.classList.contains('strikethrough') : false;
+                
+                renderTaskContent(newTask, isStrikethrough);
+                addTaskEvents(newTask);
+                
+                inboxContainer.appendChild(newTask);
+                updateTaskColor(newTask, inboxContainer);
+            });
+            
+            clearSelection();
+            checkInboxEmpty();
+            recalculateAllTotals();
+        }
+
         function renderTaskContent(task, isStrikethrough = false) {
             const name = task.dataset.name;
             const seconds = parseInt(task.dataset.seconds);
@@ -1895,7 +1927,8 @@
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.task') && 
                 !e.target.closest('#btn-remove') && 
-                !e.target.closest('#btn-strikethrough')) {
+                !e.target.closest('#btn-strikethrough') &&
+                !e.target.closest('#btn-duplicate')) {
                 clearSelection();
             }
         });

@@ -704,7 +704,7 @@
     </style>
 </head>
 <body>
-    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.3.0.</div>
+    <div class="canto-esquerdo">Criado por Pedro Nogueira. Versão 1.3.1.</div>
     <header>
         <h1>Planner Semanal</h1>
         <div class="btn-group">
@@ -726,8 +726,8 @@
         
         <div class="btn-row-2">
             <button id="btn-duplicate" onclick="duplicateSelectedTasks()" title="Duplicar Selecionados">Duplicar</button>
-            <button id="btn-prev-day" onclick="shiftAllDates(-1)" title="Voltar 1 Dia">-1 Dia</button>
-            <button id="btn-next-day" onclick="shiftAllDates(1)" title="Avançar 1 Dia">+1 Dia</button>
+            <button id="btn-prev-day" onclick="shiftAllTasks(-1)" title="Mover Tarefas -1 Dia">-1 Dia</button>
+            <button id="btn-next-day" onclick="shiftAllTasks(1)" title="Mover Tarefas +1 Dia">+1 Dia</button>
             <button id="btn-strikethrough" onclick="toggleStrikethrough()" title="Tachar Texto"><s>S</s></button>
         </div>
 
@@ -1327,37 +1327,39 @@
             });
         }
 
-        function shiftAllDates(daysToShift) {
+        function shiftAllTasks(offset) {
             saveState();
-            const dateElements = document.querySelectorAll('.day-date');
-            
-            dateElements.forEach(el => {
-                const ts = parseInt(el.dataset.timestamp);
-                if (!isNaN(ts)) {
-                    const oldDate = new Date(ts);
-                    const newDate = new Date(oldDate);
-                    newDate.setDate(oldDate.getDate() + daysToShift);
-                    
-                    el.dataset.timestamp = newDate.getTime();
-                    el.textContent = formatDate(newDate, appConfig.dateFormat);
-
-                    const newDayIndex = newDate.getDay();
-                    const newDayKey = dayKeys[newDayIndex];
-                    const newDayName = dayNamesPt[newDayKey];
-                    
-                    const dayColumn = el.closest('.day-column');
-                    if (dayColumn) {
-                        dayColumn.setAttribute('data-day', newDayKey);
-                        const header = dayColumn.querySelector('.day-header');
-                        if (header) header.textContent = newDayName;
-                        
-                        const content = dayColumn.querySelector('.day-content');
-                        if (content) {
-                            const tasks = content.querySelectorAll('.task');
-                            tasks.forEach(t => updateTaskColor(t, content));
-                        }
+            const columns = Array.from(document.querySelectorAll('.day-column'));
+                      
+            if (offset > 0) {
+                for (let i = columns.length - 1; i >= 0; i--) {
+                    const targetIndex = i + offset;
+                    if (targetIndex < columns.length) {
+                        moveTasks(columns[i], columns[targetIndex]);
                     }
                 }
+            } else {
+                for (let i = 0; i < columns.length; i++) {
+                    const targetIndex = i + offset;
+                    if (targetIndex >= 0) {
+                        moveTasks(columns[i], columns[targetIndex]);
+                    }
+                }
+            }
+            
+            recalculateAllTotals();
+        }
+
+        function moveTasks(sourceCol, targetCol) {
+            const sourceContent = sourceCol.querySelector('.day-content');
+            const targetContent = targetCol.querySelector('.day-content');
+            
+            if (!sourceContent || !targetContent) return;
+
+            const tasks = Array.from(sourceContent.querySelectorAll('.task'));
+            tasks.forEach(task => {
+                targetContent.appendChild(task);
+                updateTaskColor(task, targetContent);
             });
         }
 
